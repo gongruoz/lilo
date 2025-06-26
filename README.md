@@ -85,25 +85,8 @@ pnpm dev
 
 ## 🎯 设计理念
 
-Lilo 的名字来源于"lifelong / lie low"的缩写。In celebration of the lifelong long-distance friendships that can lie dormant for a long time till we meet again in person. But while we're apart, there is this live collage poetry games we could play together :) Lifelong friendship poetry. Live long the friendship and poetry. 
+Lilo 的名字来源于"lifelong / lie low"的缩写。In celebration of the lifelong long-distance friendships that can lie dormant for a long time till we meet again in person. But while we're apart, there is this live collage poetry game we could play together :) Lifelong friendship poetry. Live long the friendship and poetry. 
 
-### 创意拼贴
-将数字时代的便利与传统拼贴艺术相结合，让任何人都能轻松创作出富有诗意的作品。
-
-### 协作精神
-强调两人协作的重要性，通过共同创作建立更深层的连接和理解。
-
-### 技术与艺术
-运用先进的 OCR 技术简化创作流程，让用户专注于创意表达而非技术操作。
-
-## 🔮 未来规划
-
-- [ ] 支持更多人同时协作（3-4人）
-- [ ] 添加更多文字片段样式和效果
-- [ ] 集成真实的实时通信系统
-- [ ] 支持音频和视频素材
-- [ ] 创作社区和作品展示
-- [ ] 移动端适配
 
 ## 🤝 贡献
 
@@ -113,6 +96,3 @@ Lilo 的名字来源于"lifelong / lie low"的缩写。In celebration of the lif
 
 [MIT License](LICENSE)
 
----
-
-🎨 **开始你的诗语共创之旅！** 与朋友一起创造属于你们的美丽作品。
