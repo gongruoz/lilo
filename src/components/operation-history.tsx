@@ -64,6 +64,7 @@ export default function OperationHistory({ operations, onClose }: OperationHisto
         return `移动了文字 "${op.data.text}"`
       case "delete":
         return `删除了文字片段`
+
       default:
         return "未知操作"
     }

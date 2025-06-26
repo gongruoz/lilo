@@ -1,36 +1,118 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🎨 Lilo - 诗语共创
 
-## Getting Started
+一个创新的实时协作创意工具，让两个人可以一起创作美丽的拼贴诗。
 
-First, run the development server:
+## ✨ 核心功能
 
+### 🔗 双人协作空间
+- 通过房间号系统连接两个创作者
+- 实时同步所有操作，看到彼此的创作过程
+- 显示协作者的实时光标位置
+
+### 📷 智能图片处理
+- 上传包含文字的图片（书页、报纸、杂志等）
+- 使用 OCR 技术自动识别并提取文字
+- 将识别的文字自动剪切成独立的图片片段
+
+### 🎭 自由创作
+- 拖拽文字片段进行自由排列
+- 支持旋转、移动等操作
+- 手动添加纯文字元素
+- 双击删除文字片段
+
+### 💾 保存与分享
+- 导出创作成果为文本
+- 保存创作为图片文件
+- 一键分享到社交媒体
+- 查看创作过程回放
+
+## 🚀 快速开始
+
+### 安装依赖
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+# 或
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 启动开发服务器
+```bash
+npm run dev
+# 或
+pnpm dev
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+在浏览器中打开 [http://localhost:3000](http://localhost:3000) 开始使用。
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 📖 使用指南
 
-## Learn More
+### 1. 创建或加入房间
+- 输入你的名字
+- 点击"创建新房间"或输入房间号"加入房间"
 
-To learn more about Next.js, take a look at the following resources:
+### 2. 上传图片素材
+- 点击"上传图片"按钮
+- 选择包含文字的图片文件
+- 等待 OCR 处理完成，文字片段会自动出现在画布上
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 3. 开始创作
+- 拖拽文字片段到想要的位置
+- 文字片段会自动带有轻微旋转角度，营造自然的拼贴效果
+- 与你的伙伴实时协作，看到彼此的操作
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 4. 保存作品
+- 点击"导出文本"复制诗歌文本
+- 点击"保存图片"下载创作的图片版本
+- 点击"分享创作"在社交媒体上分享
 
-## Deploy on Vercel
+## 🛠️ 技术栈
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 前端框架
+- **Next.js 14** - React 全栈框架
+- **TypeScript** - 类型安全的 JavaScript
+- **Tailwind CSS** - 实用优先的 CSS 框架
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### UI 组件
+- **Radix UI** - 无样式的高质量组件
+- **Lucide React** - 美观的图标库
+
+### 核心功能
+- **Tesseract.js** - 浏览器中的 OCR 文字识别
+- **Canvas API** - 图片处理和导出
+
+### 实时协作
+- 模拟的实时协作系统（支持升级到真实的 WebSocket 或 WebRTC）
+
+## 🎯 设计理念
+
+Lilo 的名字来源于"Live Love"的缩写，代表了实时（Live）创作和热爱（Love）艺术的理念。
+
+### 创意拼贴
+将数字时代的便利与传统拼贴艺术相结合，让任何人都能轻松创作出富有诗意的作品。
+
+### 协作精神
+强调两人协作的重要性，通过共同创作建立更深层的连接和理解。
+
+### 技术与艺术
+运用先进的 OCR 技术简化创作流程，让用户专注于创意表达而非技术操作。
+
+## 🔮 未来规划
+
+- [ ] 支持更多人同时协作（3-4人）
+- [ ] 添加更多文字片段样式和效果
+- [ ] 集成真实的实时通信系统
+- [ ] 支持音频和视频素材
+- [ ] 创作社区和作品展示
+- [ ] 移动端适配
+
+## 🤝 贡献
+
+欢迎提交 Issue 和 Pull Request 来帮助改进 Lilo！
+
+## 📄 许可证
+
+[MIT License](LICENSE)
+
+---
+
+🎨 **开始你的诗语共创之旅！** 与朋友一起创造属于你们的美丽作品。

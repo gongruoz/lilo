@@ -20,7 +20,7 @@ interface WordPieceProps {
   piece: WordPieceData
   onUpdate: (id: string, updates: Partial<WordPieceData>) => void
   onDelete: (id: string) => void
-  canvasRef: React.RefObject<HTMLDivElement>
+  canvasRef: React.RefObject<HTMLDivElement | null>
 }
 
 export default function WordPiece({ piece, onUpdate, onDelete, canvasRef }: WordPieceProps) {
