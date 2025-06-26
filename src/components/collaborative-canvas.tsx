@@ -10,7 +10,7 @@ import WordPiece from "./word-piece"
 import ImageUpload from "./image-upload"
 import UserCursor from "./user-cursor"
 import OperationHistory from "./operation-history"
-import { useRealtimeCollaboration } from "../hooks/use-realtime-collaboration"
+import { useCrossWindowCollaboration } from "../hooks/use-cross-window-collaboration"
 
 interface CollaborativeCanvasProps {
   roomId: string
@@ -37,7 +37,7 @@ export default function CollaborativeCanvas({ roomId, userName }: CollaborativeC
     updateCursor,
     clearCanvas,
     getOperationHistory,
-  } = useRealtimeCollaboration(roomId, userName)
+  } = useCrossWindowCollaboration(roomId, userName)
 
   const colors = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#98D8C8"]
 

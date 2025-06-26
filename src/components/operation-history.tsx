@@ -8,7 +8,7 @@ import { Play, Pause, RotateCcw, X, FastForward } from "lucide-react"
 
 interface Operation {
   id: string
-  type: "add" | "update" | "delete" | "cursor"
+  type: "add" | "update" | "delete" | "cursor" | "clear"
   data: any
   userId: string
   timestamp: number
@@ -64,7 +64,8 @@ export default function OperationHistory({ operations, onClose }: OperationHisto
         return `移动了文字 "${op.data.text}"`
       case "delete":
         return `删除了文字片段`
-
+      case "clear":
+        return `清空了画布`
       default:
         return "未知操作"
     }
