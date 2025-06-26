@@ -18,7 +18,7 @@ interface WordPieceData {
 
 interface WordPieceProps {
   piece: WordPieceData
-  onUpdate: (id: string, updates: Partial<WordPieceData>) => void
+  onUpdate: (piece: WordPieceData) => void
   onDelete: (id: string) => void
   canvasRef: React.RefObject<HTMLDivElement | null>
 }
@@ -38,6 +38,10 @@ export default function WordPiece({ piece, onUpdate, onDelete, canvasRef }: Word
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
     })
+
+    // 阻止事件冒泡
+    e.preventDefault()
+    e.stopPropagation()
   }
 
   const handleMouseMove = (e: MouseEvent) => {
@@ -53,17 +57,22 @@ export default function WordPiece({ piece, onUpdate, onDelete, canvasRef }: Word
     const maxX = canvasRect.width - pieceWidth
     const maxY = canvasRect.height - pieceHeight
 
-    onUpdate(piece.id, {
+    const updatedPiece = {
+      ...piece,
       x: Math.max(0, Math.min(newX, maxX)),
       y: Math.max(0, Math.min(newY, maxY)),
-    })
+    }
+
+    onUpdate(updatedPiece)
   }
 
   const handleMouseUp = () => {
     setIsDragging(false)
   }
 
-  const handleDoubleClick = () => {
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
     onDelete(piece.id)
   }
 
@@ -77,7 +86,7 @@ export default function WordPiece({ piece, onUpdate, onDelete, canvasRef }: Word
         document.removeEventListener("mouseup", handleMouseUp)
       }
     }
-  }, [isDragging, dragOffset])
+  }, [isDragging])
 
   // 计算显示尺寸（缩放原图片）
   const displayWidth = piece.width ? Math.min(piece.width * 0.3, 150) : 100

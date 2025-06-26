@@ -31,432 +31,498 @@ interface Operation {
   timestamp: number
 }
 
-interface RoomState {
-  users: Map<string, User>
-  wordPieces: Map<string, WordPieceData>
-  operations: Operation[]
+interface BroadcastMessage {
+  type: "user_join" | "user_leave" | "operation" | "cursor_update" | "heartbeat" | "user_request" | "user_response"
+  roomId: string
+  userId: string
+  userName?: string
+  userColor?: string
+  data?: any
+  timestamp: number
 }
 
-// 跨窗口协作服务 - 使用 BroadcastChannel + localStorage
-class CrossWindowCollaborationService {
-  private channel: BroadcastChannel
-  private storageKey: string
-  private heartbeatInterval: NodeJS.Timeout | null = null
-  private cleanupInterval: NodeJS.Timeout | null = null
-  private subscribers: Map<string, Set<(data: any) => void>> = new Map()
-
-  constructor() {
-    this.channel = new BroadcastChannel('lilo-collaboration')
-    this.storageKey = 'lilo-rooms'
-    
-    // 开始心跳检测，清理离线用户
-    this.startHeartbeat()
-    this.startCleanup()
-  }
-
-  private getRooms(): Map<string, RoomState> {
-    try {
-      const data = localStorage.getItem(this.storageKey)
-      if (!data) return new Map()
-      
-      const parsed = JSON.parse(data)
-      if (!parsed || typeof parsed !== 'object') return new Map()
-      
-      const rooms = new Map<string, RoomState>()
-      
-      Object.entries(parsed).forEach(([roomId, roomData]: [string, any]) => {
-        if (roomData && typeof roomData === 'object') {
-          rooms.set(roomId, {
-            users: new Map(Object.entries(roomData.users || {})),
-            wordPieces: new Map(Object.entries(roomData.wordPieces || {})),
-            operations: Array.isArray(roomData.operations) ? roomData.operations : []
-          })
-        }
-      })
-      
-      return rooms
-    } catch (error) {
-      console.warn('Failed to load rooms from localStorage:', error)
-      return new Map()
-    }
-  }
-
-  private saveRooms(rooms: Map<string, RoomState>) {
-    try {
-      const data: any = {}
-      rooms.forEach((roomState, roomId) => {
-        data[roomId] = {
-          users: Object.fromEntries(roomState.users),
-          wordPieces: Object.fromEntries(roomState.wordPieces),
-          operations: roomState.operations
-        }
-      })
-      localStorage.setItem(this.storageKey, JSON.stringify(data))
-    } catch (error) {
-      console.error('Failed to save rooms:', error)
-    }
-  }
-
-  joinRoom(roomId: string, user: User, callback: (data: any) => void) {
-    const rooms = this.getRooms()
-    
-    if (!rooms.has(roomId)) {
-      rooms.set(roomId, {
-        users: new Map(),
-        wordPieces: new Map(),
-        operations: []
-      })
-    }
-    
-    const room = rooms.get(roomId)!
-    room.users.set(user.id, { ...user, lastSeen: Date.now() })
-    
-    this.saveRooms(rooms)
-    
-    // 广播用户加入
-    this.broadcast(roomId, {
-      type: "user_joined",
-      user,
-      users: Array.from(room.users.values()),
-      wordPieces: Array.from(room.wordPieces.values()),
-    })
-
-    // 添加到订阅者列表
-    if (!this.subscribers.has(roomId)) {
-      this.subscribers.set(roomId, new Set())
-    }
-    this.subscribers.get(roomId)!.add(callback)
-
-    // 监听跨窗口消息
-    const messageHandler = (event: MessageEvent) => {
-      if (event.data.roomId === roomId) {
-        callback(event.data.payload)
-      }
-    }
-    
-    this.channel.addEventListener('message', messageHandler)
-    
-    return () => {
-      this.channel.removeEventListener('message', messageHandler)
-      this.subscribers.get(roomId)?.delete(callback)
-      this.leaveRoom(roomId, user.id)
-    }
-  }
-
-  leaveRoom(roomId: string, userId: string) {
-    const rooms = this.getRooms()
-    const room = rooms.get(roomId)
-    
-    if (room) {
-      room.users.delete(userId)
-      this.saveRooms(rooms)
-      
-      this.broadcast(roomId, {
-        type: "user_left",
-        userId,
-        users: Array.from(room.users.values()),
-      })
-    }
-  }
-
-  addOperation(roomId: string, operation: Operation) {
-    console.log('🔄 Adding operation:', operation.type, operation.data)
-    
-    const rooms = this.getRooms()
-    const room = rooms.get(roomId)
-    if (!room) {
-      console.warn('❌ Room not found:', roomId)
-      return
-    }
-
-    room.operations.push(operation)
-
-    if (operation.type === "add" || operation.type === "update") {
-      room.wordPieces.set(operation.data.id, operation.data)
-      console.log('✅ WordPiece updated:', operation.data.id, operation.data.text)
-    } else if (operation.type === "delete") {
-      room.wordPieces.delete(operation.data.id)
-      console.log('🗑️ WordPiece deleted:', operation.data.id)
-    } else if (operation.type === "clear") {
-      room.wordPieces.clear()
-      console.log('🧹 Canvas cleared')
-    } else if (operation.type === "cursor") {
-      const user = room.users.get(operation.userId)
-      if (user) {
-        user.cursor = operation.data.cursor
-        user.lastSeen = Date.now()
-      }
-    }
-
-    this.saveRooms(rooms)
-
-    const payload = {
-      type: "operation",
-      operation,
-      wordPieces: Array.from(room.wordPieces.values()),
-      users: Array.from(room.users.values()),
-    }
-    
-    console.log('📡 Broadcasting to', this.subscribers.get(roomId)?.size || 0, 'subscribers')
-    this.broadcast(roomId, payload)
-  }
-
-  private broadcast(roomId: string, payload: any) {
-    try {
-      const message = {
-        roomId,
-        payload,
-        timestamp: Date.now()
-      }
-      
-      // 发送到其他窗口
-      if (this.channel) {
-        this.channel.postMessage(message)
-      }
-      
-      // 立即触发当前窗口的回调（因为BroadcastChannel不会自我广播）
-      setTimeout(() => {
-        if (this.subscribers) {
-          const subscribers = this.subscribers.get(roomId)
-          if (subscribers) {
-            subscribers.forEach(callback => {
-              try {
-                callback(payload)
-              } catch (error) {
-                console.warn('Callback error:', error)
-              }
-            })
-          }
-        }
-      }, 0)
-    } catch (error) {
-      console.warn('Broadcast error:', error)
-    }
-  }
-
-
-
-  private startHeartbeat() {
-    this.heartbeatInterval = setInterval(() => {
-      const rooms = this.getRooms()
-      let hasChanges = false
-      
-      rooms.forEach((room, roomId) => {
-        const now = Date.now()
-        room.users.forEach((user, userId) => {
-          if (now - user.lastSeen > 30000) { // 30秒无活动视为离线
-            room.users.delete(userId)
-            hasChanges = true
-            this.broadcast(roomId, {
-              type: "user_left",
-              userId,
-              users: Array.from(room.users.values()),
-            })
-          }
-        })
-      })
-      
-      if (hasChanges) {
-        this.saveRooms(rooms)
-      }
-    }, 10000) // 每10秒检查一次
-  }
-
-  private startCleanup() {
-    this.cleanupInterval = setInterval(() => {
-      const rooms = this.getRooms()
-      const now = Date.now()
-      let hasChanges = false
-      
-      // 清理空房间和老旧操作
-      rooms.forEach((room, roomId) => {
-        if (room.users.size === 0) {
-          rooms.delete(roomId)
-          hasChanges = true
-        } else if (room.operations.length > 1000) {
-          // 保留最近500个操作
-          room.operations = room.operations.slice(-500)
-          hasChanges = true
-        }
-      })
-      
-      if (hasChanges) {
-        this.saveRooms(rooms)
-      }
-    }, 60000) // 每分钟清理一次
-  }
-
-  getOperations(roomId: string): Operation[] {
-    const rooms = this.getRooms()
-    return rooms.get(roomId)?.operations || []
-  }
-
-  updateUserHeartbeat(roomId: string, userId: string) {
-    try {
-      const rooms = this.getRooms()
-      if (!rooms) return
-      
-      const room = rooms.get(roomId)
-      if (!room || !room.users) return
-      
-      const user = room.users.get(userId)
-      if (user) {
-        user.lastSeen = Date.now()
-        this.saveRooms(rooms)
-      }
-    } catch (error) {
-      console.warn('Failed to update user heartbeat:', error)
-    }
-  }
-
-  destroy() {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval)
-    }
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval)
-    }
-    this.channel.close()
-  }
-}
-
-const collaborationService = new CrossWindowCollaborationService()
-
+// 真正的实时协作Hook
 export function useCrossWindowCollaboration(roomId: string, userName: string) {
   const [wordPieces, setWordPieces] = useState<WordPieceData[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [operations, setOperations] = useState<Operation[]>([])
   const [isConnected, setIsConnected] = useState(false)
+  const currentUser = useRef<User | null>(null)
+  const [isClient, setIsClient] = useState(false)
+  const broadcastChannel = useRef<BroadcastChannel | null>(null)
+  const heartbeatInterval = useRef<NodeJS.Timeout | null>(null)
 
-  const userIdRef = useRef(`${userName}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`)
-  const userColorsRef = useRef(["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD"])
-  const heartbeatRef = useRef<NodeJS.Timeout | null>(null)
-
+  // 检查客户端环境
   useEffect(() => {
-    const userId = userIdRef.current
-    const userColor = userColorsRef.current[Math.floor(Math.random() * userColorsRef.current.length)]
+    setIsClient(true)
+  }, [])
 
-    const user: User = {
-      id: userId,
+  // 初始化协作系统
+  useEffect(() => {
+    if (!isClient || !roomId || !userName) return
+
+    const colors = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#98D8C8"]
+    
+    // 创建当前用户
+    currentUser.current = {
+      id: `${userName}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       name: userName,
-      color: userColor,
+      color: colors[Math.floor(Math.random() * colors.length)],
       cursor: null,
-      lastSeen: Date.now(),
+      lastSeen: Date.now()
     }
 
-    // 订阅更新
-    const unsubscribe = collaborationService.joinRoom(roomId, user, (data) => {
-      switch (data.type) {
-        case "user_joined":
-        case "user_left":
-          setUsers(data.users || [])
-          if (data.wordPieces) {
-            setWordPieces(data.wordPieces)
-          }
-          break
-        case "operation":
-          setWordPieces(data.wordPieces || [])
-          setUsers(data.users || [])
-          setOperations((prev) => [...prev, data.operation])
-          break
-      }
-    })
+    // 创建广播频道
+    const channelName = `lilo-room-${roomId}`
+    broadcastChannel.current = new BroadcastChannel(channelName)
+
+    // 加载房间数据
+    loadRoomData()
+
+    // 监听广播消息
+    broadcastChannel.current.onmessage = (event: MessageEvent<BroadcastMessage>) => {
+      const message = event.data
+      if (message.roomId !== roomId || message.userId === currentUser.current?.id) return
+
+      handleBroadcastMessage(message)
+    }
+
+    // 广播用户加入
+    broadcastUserJoin()
+
+    // 设置心跳
+    heartbeatInterval.current = setInterval(() => {
+      broadcastHeartbeat()
+      cleanupInactiveUsers()
+    }, 3000)
 
     setIsConnected(true)
 
-    // 开始心跳
-    heartbeatRef.current = setInterval(() => {
-      collaborationService.updateUserHeartbeat(roomId, userId)
-    }, 5000)
-
+    // 清理函数
     return () => {
-      if (heartbeatRef.current) {
-        clearInterval(heartbeatRef.current)
+      if (broadcastChannel.current) {
+        broadcastUserLeave()
+        broadcastChannel.current.close()
       }
-      unsubscribe()
-      setIsConnected(false)
+      if (heartbeatInterval.current) {
+        clearInterval(heartbeatInterval.current)
+      }
     }
-  }, [roomId, userName])
+  }, [roomId, userName, isClient])
 
-  const addWordPiece = useCallback(
-    (piece: WordPieceData) => {
-      const operation: Operation = {
-        id: `op-${Date.now()}-${Math.random()}`,
-        type: "add",
-        data: piece,
-        userId: userIdRef.current,
-        timestamp: Date.now(),
+  // 加载房间数据
+  const loadRoomData = () => {
+    try {
+      const saved = localStorage.getItem(`lilo-room-${roomId}`)
+      if (saved) {
+        const roomData = JSON.parse(saved)
+        if (roomData.wordPieces) {
+          setWordPieces(roomData.wordPieces)
+        }
+        if (roomData.operations) {
+          setOperations(roomData.operations)
+        }
       }
-      collaborationService.addOperation(roomId, operation)
-    },
-    [roomId],
-  )
+    } catch (error) {
+      console.warn('Failed to load room data:', error)
+    }
+  }
 
-  const updateWordPiece = useCallback(
-    (id: string, updates: Partial<WordPieceData>) => {
-      const currentPiece = wordPieces.find((p) => p.id === id)
-      if (!currentPiece) return
-
-      const updatedPiece = { ...currentPiece, ...updates }
-      const operation: Operation = {
-        id: `op-${Date.now()}-${Math.random()}`,
-        type: "update",
-        data: updatedPiece,
-        userId: userIdRef.current,
-        timestamp: Date.now(),
+  // 保存房间数据
+  const saveRoomData = useCallback((pieces?: WordPieceData[], ops?: Operation[]) => {
+    if (!isClient) return
+    try {
+      const currentData = JSON.parse(localStorage.getItem(`lilo-room-${roomId}`) || '{}')
+      const newData = {
+        ...currentData,
+        wordPieces: pieces || wordPieces,
+        operations: ops || operations,
+        lastSaved: Date.now()
       }
-      collaborationService.addOperation(roomId, operation)
-    },
-    [roomId, wordPieces],
-  )
+      localStorage.setItem(`lilo-room-${roomId}`, JSON.stringify(newData))
+    } catch (error) {
+      console.warn('Failed to save room data:', error)
+    }
+  }, [roomId, isClient, wordPieces, operations])
 
-  const deleteWordPiece = useCallback(
-    (id: string) => {
-      const operation: Operation = {
-        id: `op-${Date.now()}-${Math.random()}`,
-        type: "delete",
-        data: { id },
-        userId: userIdRef.current,
-        timestamp: Date.now(),
-      }
-      collaborationService.addOperation(roomId, operation)
-    },
-    [roomId],
-  )
+  // 处理广播消息
+  const handleBroadcastMessage = (message: BroadcastMessage) => {
+    switch (message.type) {
+      case "user_join":
+        if (message.userName && message.userColor) {
+          const newUser: User = {
+            id: message.userId,
+            name: message.userName,
+            color: message.userColor,
+            cursor: null,
+            lastSeen: message.timestamp
+          }
+          setUsers(prev => {
+            const exists = prev.find(u => u.id === message.userId)
+            if (exists) return prev
+            return [...prev, newUser]
+          })
+          
+          // 当有新用户加入时，当前用户响应自己的存在
+          setTimeout(() => {
+            if (currentUser.current) {
+              broadcastMessage({
+                type: "user_response",
+                roomId,
+                userId: currentUser.current.id,
+                userName: currentUser.current.name,
+                userColor: currentUser.current.color
+              })
+            }
+          }, 100) // 小延迟避免消息冲突
+        }
+        break
 
-  const updateCursor = useCallback(
-    (cursor: { x: number; y: number } | null) => {
-      const operation: Operation = {
-        id: `cursor-${Date.now()}`,
-        type: "cursor",
-        data: { cursor },
-        userId: userIdRef.current,
-        timestamp: Date.now(),
-      }
-      collaborationService.addOperation(roomId, operation)
-    },
-    [roomId],
-  )
+      case "user_request":
+        // 响应用户请求，告诉新用户自己的存在
+        if (currentUser.current) {
+          broadcastMessage({
+            type: "user_response",
+            roomId,
+            userId: currentUser.current.id,
+            userName: currentUser.current.name,
+            userColor: currentUser.current.color
+          })
+        }
+        break
 
-  const clearCanvas = useCallback(() => {
+      case "user_response":
+        if (message.userName && message.userColor) {
+          const existingUser: User = {
+            id: message.userId,
+            name: message.userName,
+            color: message.userColor,
+            cursor: null,
+            lastSeen: message.timestamp
+          }
+          setUsers(prev => {
+            const exists = prev.find(u => u.id === message.userId)
+            if (exists) return prev
+            return [...prev, existingUser]
+          })
+        }
+        break
+
+      case "user_leave":
+        setUsers(prev => prev.filter(u => u.id !== message.userId))
+        break
+
+      case "operation":
+        handleRemoteOperation(message.data)
+        break
+
+      case "cursor_update":
+        setUsers(prev => prev.map(u => 
+          u.id === message.userId 
+            ? { ...u, cursor: message.data, lastSeen: message.timestamp }
+            : u
+        ))
+        break
+
+      case "heartbeat":
+        setUsers(prev => prev.map(u => 
+          u.id === message.userId 
+            ? { ...u, lastSeen: message.timestamp }
+            : u
+        ))
+        break
+    }
+  }
+
+  // 处理远程操作
+  const handleRemoteOperation = (operation: Operation) => {
+    switch (operation.type) {
+      case "add":
+        setWordPieces(prev => {
+          const exists = prev.find(p => p.id === operation.data.id)
+          if (exists) return prev
+          const updated = [...prev, operation.data]
+          saveRoomData(updated)
+          return updated
+        })
+        break
+
+      case "update":
+        setWordPieces(prev => {
+          const updated = prev.map(p => p.id === operation.data.id ? operation.data : p)
+          saveRoomData(updated)
+          return updated
+        })
+        break
+
+      case "delete":
+        setWordPieces(prev => {
+          const updated = prev.filter(p => p.id !== operation.data.id)
+          saveRoomData(updated)
+          return updated
+        })
+        break
+
+      case "clear":
+        setWordPieces([])
+        saveRoomData([])
+        break
+    }
+
+    setOperations(prev => {
+      const exists = prev.find(op => op.id === operation.id)
+      if (exists) return prev
+      const updated = [...prev, operation]
+      saveRoomData(undefined, updated)
+      return updated
+    })
+  }
+
+  // 广播消息
+  const broadcastMessage = (message: Omit<BroadcastMessage, 'timestamp'>) => {
+    if (!broadcastChannel.current || !currentUser.current) return
+    
+    const fullMessage: BroadcastMessage = {
+      ...message,
+      timestamp: Date.now()
+    }
+    
+    broadcastChannel.current.postMessage(fullMessage)
+  }
+
+  // 广播用户加入
+  const broadcastUserJoin = () => {
+    if (!currentUser.current) return
+    
+    setUsers(prev => {
+      const exists = prev.find(u => u.id === currentUser.current?.id)
+      if (exists) return prev
+      return [...prev, currentUser.current!]
+    })
+
+    // 广播自己加入
+    broadcastMessage({
+      type: "user_join",
+      roomId,
+      userId: currentUser.current.id,
+      userName: currentUser.current.name,
+      userColor: currentUser.current.color
+    })
+
+    // 请求房间内已有用户响应
+    setTimeout(() => {
+      broadcastMessage({
+        type: "user_request",
+        roomId,
+        userId: currentUser.current!.id
+      })
+    }, 200) // 稍微延迟，让user_join消息先处理
+  }
+
+  // 广播用户离开
+  const broadcastUserLeave = () => {
+    if (!currentUser.current) return
+    
+    broadcastMessage({
+      type: "user_leave",
+      roomId,
+      userId: currentUser.current.id
+    })
+  }
+
+  // 广播心跳
+  const broadcastHeartbeat = () => {
+    if (!currentUser.current) return
+    
+    broadcastMessage({
+      type: "heartbeat",
+      roomId,
+      userId: currentUser.current.id
+    })
+  }
+
+  // 清理不活跃用户
+  const cleanupInactiveUsers = () => {
+    const now = Date.now()
+    const timeout = 10000 // 10秒超时
+    
+    setUsers(prev => prev.filter(user => {
+      if (user.id === currentUser.current?.id) return true
+      return (now - user.lastSeen) < timeout
+    }))
+  }
+
+  // 广播操作
+  const broadcastOperation = (operation: Operation) => {
+    broadcastMessage({
+      type: "operation",
+      roomId,
+      userId: currentUser.current?.id || '',
+      data: operation
+    })
+  }
+
+  // 添加文字片段
+  const addWordPiece = useCallback((piece: Omit<WordPieceData, 'id'>) => {
+    if (!currentUser.current) return
+
+    const wordPiece: WordPieceData = {
+      ...piece,
+      id: `${currentUser.current.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    }
+
     const operation: Operation = {
-      id: `clear-${Date.now()}`,
+      id: `op-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: "add",
+      data: wordPiece,
+      userId: currentUser.current.id,
+      timestamp: Date.now()
+    }
+
+    // 本地更新
+    setWordPieces(prev => {
+      const updated = [...prev, wordPiece]
+      saveRoomData(updated)
+      return updated
+    })
+
+    setOperations(prev => {
+      const updated = [...prev, operation]
+      saveRoomData(undefined, updated)
+      return updated
+    })
+
+    // 广播给其他用户
+    broadcastOperation(operation)
+  }, [saveRoomData])
+
+  // 更新文字片段
+  const updateWordPiece = useCallback((piece: WordPieceData) => {
+    if (!currentUser.current) return
+
+    const operation: Operation = {
+      id: `op-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: "update",
+      data: piece,
+      userId: currentUser.current.id,
+      timestamp: Date.now()
+    }
+
+    // 本地更新
+    setWordPieces(prev => {
+      const updated = prev.map(p => p.id === piece.id ? piece : p)
+      saveRoomData(updated)
+      return updated
+    })
+
+    setOperations(prev => {
+      const updated = [...prev, operation]
+      saveRoomData(undefined, updated)
+      return updated
+    })
+
+    // 广播给其他用户
+    broadcastOperation(operation)
+  }, [saveRoomData])
+
+  // 删除文字片段
+  const deleteWordPiece = useCallback((pieceId: string) => {
+    if (!currentUser.current) return
+
+    const operation: Operation = {
+      id: `op-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: "delete",
+      data: { id: pieceId },
+      userId: currentUser.current.id,
+      timestamp: Date.now()
+    }
+
+    // 本地更新
+    setWordPieces(prev => {
+      const updated = prev.filter(p => p.id !== pieceId)
+      saveRoomData(updated)
+      return updated
+    })
+
+    setOperations(prev => {
+      const updated = [...prev, operation]
+      saveRoomData(undefined, updated)
+      return updated
+    })
+
+    // 广播给其他用户
+    broadcastOperation(operation)
+  }, [saveRoomData])
+
+  // 更新光标位置
+  const updateCursor = useCallback((cursor: { x: number; y: number } | null) => {
+    if (!currentUser.current) return
+
+    // 本地更新
+    currentUser.current.cursor = cursor
+    setUsers(prev => prev.map(u => 
+      u.id === currentUser.current?.id ? { ...u, cursor } : u
+    ))
+
+    // 广播光标位置
+    broadcastMessage({
+      type: "cursor_update",
+      roomId,
+      userId: currentUser.current.id,
+      data: cursor
+    })
+  }, [roomId])
+
+  // 清空画布
+  const clearCanvas = useCallback(() => {
+    if (!currentUser.current) return
+
+    const operation: Operation = {
+      id: `op-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type: "clear",
       data: {},
-      userId: userIdRef.current,
-      timestamp: Date.now(),
+      userId: currentUser.current.id,
+      timestamp: Date.now()
     }
-    collaborationService.addOperation(roomId, operation)
-  }, [roomId])
 
+    // 本地更新
+    setWordPieces([])
+    setOperations(prev => {
+      const updated = [...prev, operation]
+      saveRoomData([], updated)
+      return updated
+    })
+
+    // 广播给其他用户
+    broadcastOperation(operation)
+  }, [saveRoomData])
+
+  // 获取操作历史
   const getOperationHistory = useCallback(() => {
-    return collaborationService.getOperations(roomId)
-  }, [roomId])
+    return operations
+  }, [operations])
+
+  // 在客户端环境未就绪时返回默认值
+  if (!isClient) {
+    return {
+      wordPieces: [],
+      users: [],
+      currentUser: null,
+      operations: [],
+      isConnected: false,
+      addWordPiece: () => {},
+      updateWordPiece: () => {},
+      deleteWordPiece: () => {},
+      updateCursor: () => {},
+      clearCanvas: () => {},
+      getOperationHistory: () => []
+    }
+  }
 
   return {
     wordPieces,
-    users: users.filter((u) => u.id !== userIdRef.current),
-    currentUser: users.find((u) => u.id === userIdRef.current),
+    users,
+    currentUser: currentUser.current,
     operations,
     isConnected,
     addWordPiece,
@@ -464,6 +530,6 @@ export function useCrossWindowCollaboration(roomId: string, userName: string) {
     deleteWordPiece,
     updateCursor,
     clearCanvas,
-    getOperationHistory,
+    getOperationHistory
   }
 } 

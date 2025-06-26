@@ -329,7 +329,7 @@ export default function CollaborativeCanvas({ roomId, userName }: CollaborativeC
                   <div className="w-3 h-3 rounded-full bg-blue-500"></div>
                   <span className="font-medium">{userName} (你)</span>
                 </div>
-                {users.map((user) => (
+                {users.filter(user => user.name !== userName).map((user) => (
                   <div key={user.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded text-sm">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: user.color }}></div>
                     <span>{user.name}</span>
@@ -400,7 +400,7 @@ export default function CollaborativeCanvas({ roomId, userName }: CollaborativeC
                   ))}
 
                   {/* 其他用户的光标 */}
-                  {users.map((user) => user.cursor && <UserCursor key={user.id} user={user} position={user.cursor} />)}
+                  {users.map((user) => user.cursor && user.name !== userName && <UserCursor key={user.id} user={user} position={user.cursor} />)}
 
                   {wordPieces.length === 0 && (
                     <div className="absolute inset-0 flex items-center justify-center">
