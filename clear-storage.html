@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>清理 Lilo 存储数据</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 600px; 
+            margin: 50px auto; 
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+        }
+        .container {
+            background: rgba(255,255,255,0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .danger {
+            background: #f44336;
+        }
+        .danger:hover {
+            background: #da190b;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧹 Lilo 数据清理工具</h1>
+        <p>如果遇到 "Cannot read properties of undefined" 错误，可以使用此工具清理损坏的数据。</p>
+        
+        <div class="status" id="status">
+            <strong>当前状态：</strong>等待操作...
+        </div>
+        
+        <button onclick="checkStorage()">🔍 检查存储数据</button>
+        <button onclick="clearLiloData()" class="danger">🗑️ 清理 Lilo 数据</button>
+        <button onclick="clearAllStorage()" class="danger">💥 清理所有 localStorage</button>
+        
+        <div style="margin-top: 30px;">
+            <h3>📋 操作说明：</h3>
+            <ul style="text-align: left; max-width: 400px; margin: 0 auto;">
+                <li><strong>检查存储数据</strong> - 查看当前 localStorage 中的数据</li>
+                <li><strong>清理 Lilo 数据</strong> - 只删除 lilo-rooms 相关数据</li>
+                <li><strong>清理所有数据</strong> - 删除所有 localStorage 数据（谨慎使用）</li>
+            </ul>
+        </div>
+        
+        <div style="margin-top: 20px;">
+            <p><strong>清理后请：</strong></p>
+            <p>1. 关闭所有 Lilo 标签页</p>
+            <p>2. 重新打开 <a href="http://localhost:3000" style="color: #FFD700;">http://localhost:3000</a></p>
+            <p>3. 重新开始协作</p>
+        </div>
+    </div>
+
+    <script>
+        function updateStatus(message, isError = false) {
+            const status = document.getElementById('status');
+            status.innerHTML = `<strong>状态：</strong>${message}`;
+            status.style.background = isError ? 'rgba(244, 67, 54, 0.3)' : 'rgba(76, 175, 80, 0.3)';
+        }
+
+        function checkStorage() {
+            try {
+                const liloData = localStorage.getItem('lilo-rooms');
+                const allKeys = Object.keys(localStorage);
+                
+                let message = `找到 ${allKeys.length} 个 localStorage 项目。<br/>`;
+                
+                if (liloData) {
+                    try {
+                        const parsed = JSON.parse(liloData);
+                        const roomCount = Object.keys(parsed).length;
+                        message += `Lilo 数据正常，包含 ${roomCount} 个房间。`;
+                    } catch (e) {
+                        message += `⚠️ Lilo 数据已损坏！建议清理。`;
+                    }
+                } else {
+                    message += `没有找到 Lilo 数据。`;
+                }
+                
+                updateStatus(message);
+            } catch (error) {
+                updateStatus(`检查失败：${error.message}`, true);
+            }
+        }
+
+        function clearLiloData() {
+            try {
+                localStorage.removeItem('lilo-rooms');
+                updateStatus('✅ Lilo 数据已清理！请重新打开应用。');
+            } catch (error) {
+                updateStatus(`清理失败：${error.message}`, true);
+            }
+        }
+
+        function clearAllStorage() {
+            if (confirm('确定要清理所有 localStorage 数据吗？这会影响其他网站的数据。')) {
+                try {
+                    localStorage.clear();
+                    updateStatus('✅ 所有 localStorage 数据已清理！');
+                } catch (error) {
+                    updateStatus(`清理失败：${error.message}`, true);
+                }
+            }
+        }
+
+        // 页面加载时自动检查
+        window.onload = function() {
+            checkStorage();
+        }
+    </script>
+</body>
+</html> 

@@ -60,18 +60,23 @@ class CrossWindowCollaborationService {
       if (!data) return new Map()
       
       const parsed = JSON.parse(data)
+      if (!parsed || typeof parsed !== 'object') return new Map()
+      
       const rooms = new Map<string, RoomState>()
       
       Object.entries(parsed).forEach(([roomId, roomData]: [string, any]) => {
-        rooms.set(roomId, {
-          users: new Map(Object.entries(roomData.users || {})),
-          wordPieces: new Map(Object.entries(roomData.wordPieces || {})),
-          operations: roomData.operations || []
-        })
+        if (roomData && typeof roomData === 'object') {
+          rooms.set(roomId, {
+            users: new Map(Object.entries(roomData.users || {})),
+            wordPieces: new Map(Object.entries(roomData.wordPieces || {})),
+            operations: Array.isArray(roomData.operations) ? roomData.operations : []
+          })
+        }
       })
       
       return rooms
-    } catch {
+    } catch (error) {
+      console.warn('Failed to load rooms from localStorage:', error)
       return new Map()
     }
   }
@@ -197,22 +202,36 @@ class CrossWindowCollaborationService {
   }
 
   private broadcast(roomId: string, payload: any) {
-    const message = {
-      roomId,
-      payload,
-      timestamp: Date.now()
-    }
-    
-    // 发送到其他窗口
-    this.channel.postMessage(message)
-    
-    // 立即触发当前窗口的回调（因为BroadcastChannel不会自我广播）
-    setTimeout(() => {
-      const subscribers = this.subscribers.get(roomId)
-      if (subscribers) {
-        subscribers.forEach(callback => callback(payload))
+    try {
+      const message = {
+        roomId,
+        payload,
+        timestamp: Date.now()
       }
-    }, 0)
+      
+      // 发送到其他窗口
+      if (this.channel) {
+        this.channel.postMessage(message)
+      }
+      
+      // 立即触发当前窗口的回调（因为BroadcastChannel不会自我广播）
+      setTimeout(() => {
+        if (this.subscribers) {
+          const subscribers = this.subscribers.get(roomId)
+          if (subscribers) {
+            subscribers.forEach(callback => {
+              try {
+                callback(payload)
+              } catch (error) {
+                console.warn('Callback error:', error)
+              }
+            })
+          }
+        }
+      }, 0)
+    } catch (error) {
+      console.warn('Broadcast error:', error)
+    }
   }
 
 
@@ -273,13 +292,20 @@ class CrossWindowCollaborationService {
   }
 
   updateUserHeartbeat(roomId: string, userId: string) {
-    const rooms = this.getRooms()
-    const room = rooms.get(roomId)
-    const user = room?.users.get(userId)
-    
-    if (user) {
-      user.lastSeen = Date.now()
-      this.saveRooms(rooms)
+    try {
+      const rooms = this.getRooms()
+      if (!rooms) return
+      
+      const room = rooms.get(roomId)
+      if (!room || !room.users) return
+      
+      const user = room.users.get(userId)
+      if (user) {
+        user.lastSeen = Date.now()
+        this.saveRooms(rooms)
+      }
+    } catch (error) {
+      console.warn('Failed to update user heartbeat:', error)
     }
   }
 
